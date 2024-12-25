@@ -97,7 +97,7 @@ def connect_to_server():
             return
         
         # if server acknowledged, begin conversation
-        print("Server acknowledged join, waiting for pub-key")
+        print("Server acknowledged join, waiting for public key. (this is going to take a while)")
 
         # disable socket timeout
         server_socket.settimeout(None)

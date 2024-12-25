@@ -114,6 +114,8 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
             private_key,  gen_duration = generate_private_key()
             public_key = public_key_from_private_key(private_key=private_key)
 
+            print(f"It took me {gen_duration} ms to generate this key.")
+
             # send public key to user
             packet_to_send = Packet(code=CODE_PUB_KEY, data=public_key)
             client_socket.send(packet_to_send.get_as_bytes())
@@ -122,6 +124,8 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
 
             # wait for login packet
             client_packet = receive_packet(sock=client_socket)
+
+            print(client_packet.data)
 
             # if not login packet
             if client_packet.code != CODE_LOGIN:
@@ -180,7 +184,9 @@ if __name__ == "__main__":
         print(f"Usage: {sys.argv[0]} <password>")
         exit(1)
 
-    password = sys.argv[1].strip()
+    password = sys.argv[1].encode('utf-8')
+
+    print(f"password: '{password}'")
 
     try:
         run_server(password=password)
