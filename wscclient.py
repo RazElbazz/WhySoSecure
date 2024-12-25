@@ -1,6 +1,7 @@
 # imports
 import socket
 import time
+import threading
 # cryptography imports
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
@@ -14,8 +15,11 @@ CODE_ERROR = 400
 CODE_PUB_KEY = 300
 CODE_ACKNOWLEDGE = 200
 CODE_UPDATE = 201
+CODE_MESSAGE_ACKNOWLEDGE = 203
 CODE_JOIN = 100
 CODE_LOGIN = 101
+CODE_LOGIN_USERNAME = 102
+CODE_MESSAGE = 103
 
 
 class Packet:
@@ -78,6 +82,19 @@ def generate_private_key(size: int = 2 ** 13):
     return private_key, duration_in_miliseconds
 
 
+def client_listener(server_socket):
+    while True:
+        server_packet = receive_packet(sock=server_socket)
+        if server_packet.code == CODE_UPDATE:
+            print(server_packet.data)
+        elif server_packet.code == CODE_MESSAGE_ACKNOWLEDGE:
+            pass
+        else:
+            print("Error occured: received server packet which is not update or message acknowledge:")
+            print(server_packet.get_as_bytes())
+            return
+
+
 def connect_to_server():
     # create tcp client socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
@@ -110,11 +127,11 @@ def connect_to_server():
         
         public_key = server_packet.data
 
-        print(f"Received public key: '{public_key}'")
+        print(f"->Public key received.")
 
-        password = input("100 seconds left to enter password: ")
+        password = input("password: ")
 
-        packet_to_send = Packet(code=CODE_LOGIN, data=password.strip())
+        packet_to_send = Packet(code=CODE_LOGIN, data=password)
         server_socket.send(packet_to_send.get_as_bytes())
 
         server_packet = receive_packet(sock=server_socket)
@@ -128,7 +145,39 @@ def connect_to_server():
             print(server_packet.get_as_bytes())
             return
         
-        print("Correct password! We're in.")
+        # password is correct, take username
+        print("->Password accepted.")
+
+        name = input("name to join with: ")
+
+        packet_to_send = Packet(code=CODE_LOGIN_USERNAME, data=name)
+        server_socket.send(packet_to_send.get_as_bytes())
+
+        server_packet = receive_packet(sock=server_socket)
+
+        if server_packet.code == CODE_ERROR:
+            print(f"Error occured: Server returned error: `{server_packet.data}`")
+            return
+        
+        if server_packet.code != CODE_ACKNOWLEDGE:
+            print("Error occured: received server packet which is not error or acknowledge:")
+            print(server_packet.get_as_bytes())
+            return
+        
+        print("->Server acknowledged, you are now in the chat.")
+
+        # joined room
+
+        # start client listener
+        client_listener_thread = threading.Thread(target=client_listener, args=(server_socket,))
+        client_listener_thread.start()
+        
+
+        # read input from user to chat
+        while True:
+            message = input()
+            packet_to_send = Packet(code=CODE_MESSAGE, data=message)
+            server_socket.send(packet_to_send.get_as_bytes())
 
 
 

@@ -16,8 +16,14 @@ CODE_ERROR = 400
 CODE_PUB_KEY = 300
 CODE_ACKNOWLEDGE = 200
 CODE_UPDATE = 201
+CODE_MESSAGE_ACKNOWLEDGE = 203
 CODE_JOIN = 100
 CODE_LOGIN = 101
+CODE_LOGIN_USERNAME = 102
+CODE_MESSAGE = 103
+
+
+clients = {}
 
 
 class Packet:
@@ -125,8 +131,6 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
             # wait for login packet
             client_packet = receive_packet(sock=client_socket)
 
-            print(client_packet.data)
-
             # if not login packet
             if client_packet.code != CODE_LOGIN:
                 packet_to_send = Packet(code=CODE_ERROR, data=b'Code was not login.')
@@ -139,21 +143,79 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
                 client_socket.send(packet_to_send.get_as_bytes())
                 return
             
-            # correct password
+            # acknowledge correct password
             packet_to_send = Packet(code=CODE_ACKNOWLEDGE, data=b'')
             client_socket.send(packet_to_send.get_as_bytes())
 
+            # wait for name packet
+            client_packet = receive_packet(sock=client_socket)
 
+            if client_packet.code != CODE_LOGIN_USERNAME:
+                packet_to_send = Packet(code=CODE_ERROR, data=b'Code was not login username.')
+                client_socket.send(packet_to_send.get_as_bytes())
+                return
+            
+            name = client_packet.data
 
+            # check if username too long
+            if len(name) > 15:
+                packet_to_send = Packet(code=CODE_ERROR, data=b'Bad username.')
+                client_socket.send(packet_to_send.get_as_bytes())
+                return
+            
+            # if username in use
+            for client in clients.values():
+                if name == client[0]:
+                    packet_to_send = Packet(code=CODE_ERROR, data=b'Bad username.')
+                    client_socket.send(packet_to_send.get_as_bytes())
+                    return
+            
+            # client is now in chat
+            client_socket.settimeout(None)
+            clients[client_socket] = (name, private_key)
+
+            # acknowledge valid name
+            packet_to_send = Packet(code=CODE_ACKNOWLEDGE, data=b'')
+            client_socket.send(packet_to_send.get_as_bytes())
+            
+            message_packet = Packet(code=CODE_UPDATE, data=f"{name} has joined the chat.")
+
+            for client in clients:
+                if client[0] != name:
+                    client.send(message_packet.get_as_bytes())
+
+            while True:
+                client_packet = receive_packet(sock=client_socket)
+                if client_packet.code != CODE_MESSAGE:
+                    print(f"Client disconnected from {client_address} (Received code which is not message)")
+
+                    # remove from clients dict
+                    del clients[client_socket]
+
+                message = f"{name}: {client_packet.data}".encode()
+                
+                message_packet = Packet(code=CODE_UPDATE, data=message)
+
+                # if message, send to all clients
+                for client in clients:
+                    client.send(message_packet.get_as_bytes())
 
 
     # handle client disconnect
     except socket.error as e:
         print(f"Client disconnected from {client_address} ({e.errno})")
+
+        # remove from clients dict if needed
+        if client_socket in clients:
+            del clients[client_socket]
     
     # handle exceptions
     except Exception as e:
         print(f"Client disconnected from {client_address} ({e})")
+
+        # remove from clients dict if needed
+        if client_socket in clients:
+            del clients[client_socket]
 
 def run_server(password: str):
     # create a tcp server socket
