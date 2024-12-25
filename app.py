@@ -1,5 +1,5 @@
 # flask imports
-from flask import Flask, render_template, request, url_for, session
+from flask import Flask, render_template, request, url_for, redirect
 
 # cryptography imports
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -21,20 +21,34 @@ def home():
     )
     return render_template('index.html', pub_key=pem)
 
-@app.route("/createroom")
-def createroom():
+@app.route("/createroom", methods=['POST'])
+def create_room():
     check_user_key(request.remote_addr)
-    return "Create room"
+    if 'room_name' not in request.form:
+        return "Bad request<br><a href='/'>Go back</a>"
+    
+    room_name = request.form['room_name']
 
+    # check if room doesn't already exist
+    if room_name not in rooms.keys():
+        # create room
+        rooms[room_name] = []
+        return render_template("room.html", messages=[])
+    else:
+        return "Room already exists"
+        
 @app.route("/joinroom", methods=['POST'])
 def join_room():
     check_user_key(request.remote_addr)
-    if 'room_id' not in request.form:
+    if 'room_name' not in request.form:
         return "Bad request<br><a href='/'>Go back</a>"
-    if request.form['room_id'] not in rooms.keys():
+    
+    room_name = request.form['room_name']
+
+    if room_name not in rooms.keys():
         return "Room does not exist<br><a href='/'>Go back</a>"
         
-    return request.form['room_id']
+    return render_template("room.html", messages=rooms[room_name])
 
 def check_user_key(ip_addr):
     if ip_addr not in private_keys.keys():
