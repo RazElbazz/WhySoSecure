@@ -86,9 +86,10 @@ def client_listener(server_socket):
     while True:
         server_packet = receive_packet(sock=server_socket)
         if server_packet.code == CODE_UPDATE:
-            print(server_packet.data)
+            message = server_packet.data.decode()
+            print(message)
         elif server_packet.code == CODE_MESSAGE_ACKNOWLEDGE:
-            pass
+            print("->Server acknowledged your message.")
         else:
             print("Error occured: received server packet which is not update or message acknowledge:")
             print(server_packet.get_as_bytes())

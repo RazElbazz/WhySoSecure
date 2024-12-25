@@ -164,8 +164,8 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
                 return
             
             # if username in use
-            for client in clients.values():
-                if name == client[0]:
+            for client in clients:
+                if name == clients[client][0]:
                     packet_to_send = Packet(code=CODE_ERROR, data=b'Bad username.')
                     client_socket.send(packet_to_send.get_as_bytes())
                     return
@@ -177,11 +177,12 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
             # acknowledge valid name
             packet_to_send = Packet(code=CODE_ACKNOWLEDGE, data=b'')
             client_socket.send(packet_to_send.get_as_bytes())
-            
-            message_packet = Packet(code=CODE_UPDATE, data=f"{name} has joined the chat.")
 
+            message_packet = Packet(code=CODE_UPDATE, data=(client_address[0].encode() + b"@" + name + b" has joined the chat."))
+
+            # send message to all clients
             for client in clients:
-                if client[0] != name:
+                if clients != client_socket:
                     client.send(message_packet.get_as_bytes())
 
             while True:
@@ -192,8 +193,19 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
                     # remove from clients dict
                     del clients[client_socket]
 
-                message = f"{name}: {client_packet.data}".encode()
-                
+                    message_packet = Packet(code=CODE_UPDATE, data=(client_address[0].encode() + b"@" + name + b" has left the chat."))
+
+                    # send message to all clients
+                    for client in clients:
+                        client.send(message_packet.get_as_bytes())
+
+                    return
+
+                message_packet = Packet(code=CODE_MESSAGE_ACKNOWLEDGE, data=b'')
+                client_socket.send(message_packet.get_as_bytes())
+
+                message = name + b": " + client_packet.data
+
                 message_packet = Packet(code=CODE_UPDATE, data=message)
 
                 # if message, send to all clients
@@ -208,6 +220,11 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
         # remove from clients dict if needed
         if client_socket in clients:
             del clients[client_socket]
+            message_packet = Packet(code=CODE_UPDATE, data=(client_address[0].encode() + b"@" + name + b" has left the chat."))
+
+            # send message to all clients
+            for client in clients:
+                client.send(message_packet.get_as_bytes())
     
     # handle exceptions
     except Exception as e:
@@ -216,6 +233,11 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
         # remove from clients dict if needed
         if client_socket in clients:
             del clients[client_socket]
+            message_packet = Packet(code=CODE_UPDATE, data=(client_address[0].encode() + b"@" + name + b" has left the chat."))
+
+            # send message to all clients
+            for client in clients:
+                client.send(message_packet.get_as_bytes())
 
 def run_server(password: str):
     # create a tcp server socket
