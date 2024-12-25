@@ -36,20 +36,26 @@ def generate_private_key(size: int = 2 ** 13):
 
 
 def run_server():
+    # create a tcp server socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        # bind
         server_socket.bind((HOST, PORT))
+        print(f"Server binded on {HOST}:{PORT}")
 
-
-
+        # listen
         server_socket.listen()
-        client_socket, client_address = server_socket.accept()
-        with client_socket:
-            print(f"Connected by {client_address}")
-            while True:
-                data = client_socket.recv(1)
-                if not data:
-                    break
-                client_socket.sendall(data)
+        print(f"Server listening on {HOST}:{PORT}")
+
+        while True:
+        # accept clients
+            client_socket, client_address = server_socket.accept()
+            with client_socket:
+                print(f"Connected by {client_address}")
+                while True:
+                    data = client_socket.recv(1)
+                    if not data:
+                        break
+                    client_socket.sendall(data)
 
 
 if __name__ == "__main__":
