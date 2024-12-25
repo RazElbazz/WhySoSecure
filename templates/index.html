@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+
+<head>
+    <title>WhySoSecure</title>
+</head>
+
+<body>
+    <main>
+        <h1>Public key:</h1>
+        <p hidden>{{pub_key}}</p>
+        <a href="/createroom">Create Room</a><br>
+        <form method="POST" action="{{ url_for('join_room') }}">
+            <input type="text" name="room_id">
+
+            <button type="submit">
+                join room
+            </button>
+        </form>
+    </main>
+</body>
