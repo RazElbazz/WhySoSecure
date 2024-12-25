@@ -10,17 +10,21 @@ HOST = "127.0.0.1"
 PORT = 65432
 
 # PROTOCOL CODES
-ERROR = 400
-ACKNOWLEDGE = 200
-UPDATE = 201
-JOIN = 100
+CODE_ERROR = 400
+CODE_PUB_KEY = 300
+CODE_ACKNOWLEDGE = 200
+CODE_UPDATE = 201
+CODE_JOIN = 100
 
 
 class Packet:
     def __init__(self, code: int, data: bytes):
         self.code = code
-        self.data = data
-    
+        if isinstance(data,  bytes):
+            self.data = data
+        elif isinstance(data, str):
+            self.data = data.encode()
+
     def get_as_bytes(self):
         return (
             self.code.to_bytes(length=2, byteorder="big") + # code (2 byte)
@@ -28,7 +32,6 @@ class Packet:
             self.data # data
             )
     
-
 
 def receive_packet(sock: socket.socket) -> Packet:
     code = int.from_bytes(sock.recv(2), byteorder="big")
@@ -81,25 +84,38 @@ def connect_to_server():
         server_socket.connect((HOST, PORT))
 
         # send join request
-        join_packet = Packet(code=JOIN, data=b'')
-        server_socket.sendall(join_packet.get_as_bytes())
+        join_packet = Packet(code=CODE_JOIN, data=b'')
+        server_socket.send(join_packet.get_as_bytes())
         print(f"Sent join request to {HOST}:{PORT}")
 
         server_packet = receive_packet(sock=server_socket)
 
-        # check if server acknowledged the join packet
-        if server_packet.code != ACKNOWLEDGE:
+        # check if server didn't acknowledge
+        if server_packet.code != CODE_ACKNOWLEDGE:
             print("Not acknowledged by server")
             return
         
         # if server acknowledged, begin conversation
         print("Server acknowledged join, waiting for pub-key")
 
+        # disable socket timeout
+        server_socket.settimeout(None)
+
+        server_packet = receive_packet(sock=server_socket)
+        if server_packet.code != CODE_PUB_KEY:
+            print("Error occured: received server packet which is not pub_key:")
+            print(server_packet.get_as_bytes())
+            return
+        
+        public_key = server_packet.data
+
+        print(f"Received public key: '{public_key}'")
+
 
 
 if __name__ == "__main__":
-    #try:
-    connect_to_server()
-    #except Exception as e:
-    #    print("Error occured:")
-    #    print(e)
+    try:
+        connect_to_server()
+    except Exception as e:
+        print("Error occured:")
+        print(e)

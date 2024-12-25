@@ -11,17 +11,21 @@ HOST = "127.0.0.1"
 PORT = 65432
 
 # PROTOCOL CODES
-ERROR = 400
-ACKNOWLEDGE = 200
-UPDATE = 201
-JOIN = 100
+CODE_ERROR = 400
+CODE_PUB_KEY = 300
+CODE_ACKNOWLEDGE = 200
+CODE_UPDATE = 201
+CODE_JOIN = 100
 
 
 class Packet:
     def __init__(self, code: int, data: bytes):
         self.code = code
-        self.data = data
-    
+        if isinstance(data,  bytes):
+            self.data = data
+        elif isinstance(data, str):
+            self.data = data.encode()
+
     def get_as_bytes(self):
         return (
             self.code.to_bytes(length=2, byteorder="big") + # code (2 byte)
@@ -57,6 +61,17 @@ def generate_private_key(size: int = 2 ** 13):
     return private_key, duration_in_miliseconds
 
 
+def public_key_from_private_key(private_key: rsa.RSAPrivateKey) -> bytes:
+    # get public key
+    public_key = private_key.public_key()
+
+    # return in correct encoding
+    return public_key.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+
 def receive_packet(sock: socket.socket) -> Packet:
     code = int.from_bytes(sock.recv(2), byteorder="big")
     length = int.from_bytes(sock.recv(5), byteorder="big")
@@ -84,26 +99,33 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
             client_packet = receive_packet(sock=client_socket)
             
             # if packet was not join packet
-            if client_packet.code != JOIN:
-                client_socket.sendall(code=ERROR, data=b'Code was not join.')
+            if client_packet.code != CODE_JOIN:
+                client_socket.send(code=CODE_ERROR, data=b'Code was not join.')
                 return
 
-            # if packet was join packet
-            acknowledge_join_packet = Packet(code=ACKNOWLEDGE, data=b'')
-            client_socket.sendall(acknowledge_join_packet.get_as_bytes())
+            # if packet was join packet send acknowledge packet and generate key
+            packet_to_send = Packet(code=CODE_ACKNOWLEDGE, data=b'')
+            client_socket.send(packet_to_send.get_as_bytes())
 
-
+            # generate private key
             client_socket.settimeout(None)
+            private_key,  gen_duration = generate_private_key()
+            public_key = public_key_from_private_key(private_key=private_key)
+
+            # send public key to user
+            packet_to_send = Packet(code=CODE_PUB_KEY, data=public_key)
+            client_socket.send(packet_to_send.get_as_bytes())
 
             while True:
                 # receive packet
                 client_packet = receive_packet(sock=client_socket)
-                client_socket.send(Packet(code=UPDATE, data=client_packet.data).get_as_bytes())
+                client_socket.send(Packet(code=CODE_UPDATE, data=client_packet.data).get_as_bytes())
+
     # handle client disconnect
     except socket.error as e:
         print(f"Client disconnected from {client_address} ({e.errno})")
     
-
+    # handle exceptions
     except Exception as e:
         print(f"Client disconnected from {client_address} ({e})")
 
