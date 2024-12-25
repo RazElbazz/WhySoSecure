@@ -1,4 +1,5 @@
 # imports
+import sys
 import socket
 import threading
 import time
@@ -16,6 +17,7 @@ CODE_PUB_KEY = 300
 CODE_ACKNOWLEDGE = 200
 CODE_UPDATE = 201
 CODE_JOIN = 100
+CODE_LOGIN = 101
 
 
 class Packet:
@@ -87,7 +89,7 @@ def receive_packet(sock: socket.socket) -> Packet:
     return Packet(code=code, data=data)
 
 
-def accept_client(client_socket: socket.socket, client_address: socket.AddressInfo):
+def accept_client(client_socket: socket.socket, client_address: socket.AddressInfo, password: str):
     try:
         print(f"Client connected from {client_address}")
         with client_socket:
@@ -116,10 +118,30 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
             packet_to_send = Packet(code=CODE_PUB_KEY, data=public_key)
             client_socket.send(packet_to_send.get_as_bytes())
 
-            while True:
-                # receive packet
-                client_packet = receive_packet(sock=client_socket)
-                client_socket.send(Packet(code=CODE_UPDATE, data=client_packet.data).get_as_bytes())
+            client_socket.settimeout(100)
+
+            # wait for login packet
+            client_packet = receive_packet(sock=client_socket)
+
+            # if not login packet
+            if client_packet.code != CODE_LOGIN:
+                packet_to_send = Packet(code=CODE_ERROR, data=b'Code was not login.')
+                client_socket.send(packet_to_send.get_as_bytes())
+                return
+            
+            # if login packet, but bad password
+            if client_packet.data != password:
+                packet_to_send = Packet(code=CODE_ERROR, data=b'Bad password.')
+                client_socket.send(packet_to_send.get_as_bytes())
+                return
+            
+            # correct password
+            packet_to_send = Packet(code=CODE_ACKNOWLEDGE, data=b'')
+            client_socket.send(packet_to_send.get_as_bytes())
+
+
+
+
 
     # handle client disconnect
     except socket.error as e:
@@ -129,7 +151,7 @@ def accept_client(client_socket: socket.socket, client_address: socket.AddressIn
     except Exception as e:
         print(f"Client disconnected from {client_address} ({e})")
 
-def run_server():
+def run_server(password: str):
     # create a tcp server socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         # bind
@@ -146,15 +168,22 @@ def run_server():
 
             accept_client_thread = threading.Thread(
                 target= accept_client,
-                args= (client_socket, client_address)
+                args= (client_socket, client_address, password)
             )
 
             accept_client_thread.start()
 
 
 if __name__ == "__main__":
+
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <password>")
+        exit(1)
+
+    password = sys.argv[1].strip()
+
     try:
-        run_server()
+        run_server(password=password)
     except Exception as e:
         print("Error occured:")
         print(e)

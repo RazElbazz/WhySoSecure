@@ -15,6 +15,7 @@ CODE_PUB_KEY = 300
 CODE_ACKNOWLEDGE = 200
 CODE_UPDATE = 201
 CODE_JOIN = 100
+CODE_LOGIN = 101
 
 
 class Packet:
@@ -110,6 +111,24 @@ def connect_to_server():
         public_key = server_packet.data
 
         print(f"Received public key: '{public_key}'")
+
+        password = input("100 seconds left to enter password: ")
+
+        packet_to_send = Packet(code=CODE_LOGIN, data=password.strip())
+        server_socket.send(packet_to_send.get_as_bytes())
+
+        server_packet = receive_packet(sock=server_socket)
+
+        if server_packet.code == CODE_ERROR:
+            print(f"Error occured: Server returned error: `{server_packet.data}`")
+            return
+        
+        if server_packet.code != CODE_ACKNOWLEDGE:
+            print("Error occured: received server packet which is not error or acknowledge:")
+            print(server_packet.get_as_bytes())
+            return
+        
+        print("Correct password! We're in.")
 
 
 
